@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import json
 import pandas as pd
 
 st.set_page_config(layout="wide")
@@ -18,7 +19,9 @@ ARROW_MAP = {
 # 1. Sidebar Configurations
 with st.sidebar:
     st.header("🎛️ Simulator Settings")
-    num_photons = st.slider("Total Photons to Transmit", min_value=3, max_value=12, value=5)
+    num_photons = st.slider("Total Photons to Transmit", min_value=3, max_value=20, value=8)
+    speed = st.slider("⚡ Animation Speed", min_value=0.5, max_value=3.0, value=1.5, step=0.25,
+                       help="Higher = faster photon travel and shorter dwell time in each box")
     enable_eve = st.checkbox("🕵️‍♀️ Deploy Eve (Eavesdropper Intercept)", value=True)
 
 # Generate values instantly on click to feed the smooth animation canvas
@@ -31,10 +34,10 @@ if st.button("🚀 Run Live Physics Simulation", type="primary"):
         a_bit = random.randint(0, 1)
         a_base = random.choice(['+', 'X'])
         a_arrow = ARROW_MAP[(a_base, a_bit)]
-        
+
         current_bit = a_bit
         current_base = a_base
-        
+
         e_base_log, e_arrow_log, e_bit_log = "—", "—", "—"
 
         if enable_eve:
@@ -77,55 +80,137 @@ if st.button("🚀 Run Live Physics Simulation", type="primary"):
             "b_arrow": b_arrow, "b_base": b_base, "b_bit": b_bit
         })
 
-    # --- 2. THE HIGH PERFORMANCE SMOOTH CANVAS FRAME ---
-    # High framerate calculations handled inside an embedded window frame context
-    html_canvas = f"""
+    # --- 2. THE HIGH PERFORMANCE SMOOTH CANVAS FRAME (+ a table that updates live with it) ---
+    # Data is injected via plain string substitution (not an f-string) so the JS below can use
+    # normal single braces without needing to be doubled everywhere.
+    html_template = """
     <div style="background:#111; padding:20px; border-radius:12px; font-family:sans-serif; color:white;">
-        <div style="text-align:center; font-size:18px; margin-bottom:15px; color:#aaa;">
-            Live Transmission Pipeline: Photon <span id="photon-id" style="color:#00c0f2; font-weight:bold;">1</span> of {num_photons}
+        <div style="text-align:center; font-size:18px; margin-bottom:4px; color:#aaa;">
+            Live Transmission Pipeline: Photon <span id="photon-id" style="color:#00c0f2; font-weight:bold;">1</span> of __NUM__
         </div>
+        <div id="statusLine" style="text-align:center; font-size:13px; margin-bottom:11px; color:#666; height:16px;"></div>
         <canvas id="quantumArena" width="900" height="200" style="display:block; margin:0 auto; max-width:100%; background:#1a1a1a; border-radius:8px; border:1px solid #333;"></canvas>
+
+        <div style="margin-top:16px; max-height:320px; overflow-y:auto; border-radius:8px; border:1px solid #333;">
+            <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:13px; color:#ddd;">
+                <thead>
+                    <tr id="tableHeader" style="position:sticky; top:0; background:#1a1a1a;"></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
-    const data = {str(js_photon_array)};
-    const showEve = {str(enable_eve).lower()};
+    const data = __DATA__;
+    const showEve = __SHOW_EVE__;
+    const speed = __SPEED__;
     const canvas = document.getElementById('quantumArena');
     const ctx = canvas.getContext('2d');
-    
+
     let currentIdx = 0;
-    let pX = 80; 
+    let pX = 80;
     let state = 'alice'; // alice -> transit1 -> eve -> transit2 -> bob
     let frame = 0;
+    let finished = false;
 
-    function drawBox(x, y, w, h, title, arrow, label1, label2, color, active) {{
+    // Dwell / speed settings, scaled by the speed slider (clamped so it never gets unreadable)
+    const dwellAliceEve = Math.max(6, Math.round(30 / speed));
+    const dwellBob = Math.max(8, Math.round(40 / speed));
+    const lerpRate = Math.min(0.5, 0.15 * speed);
+
+    function drawBox(x, y, w, h, title, arrow, label1, label2, color, active) {
         ctx.fillStyle = active ? '#223' : '#111';
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = active ? color : '#444';
         ctx.lineWidth = active ? 3 : 1;
         ctx.strokeRect(x, y, w, h);
-        
+
         ctx.fillStyle = color;
         ctx.font = 'bold 12px sans-serif';
         ctx.fillText(title, x + 10, y + 25);
-        
+
         ctx.fillStyle = active ? '#fff' : '#888';
         ctx.font = '32px sans-serif';
         ctx.fillText(arrow, x + w/2 - 12, y + 70);
-        
+
         ctx.fillStyle = '#aaa';
         ctx.font = '11px sans-serif';
         ctx.fillText(label1, x + 10, y + 105);
         ctx.fillText(label2, x + 10, y + 120);
-    }}
+    }
 
-    function animate() {{
+    // --- Build the live tracking table (starts as placeholders, fills in as each photon lands) ---
+    function buildTable() {
+        const header = document.getElementById('tableHeader');
+        let headerHtml = '<th style="padding:8px; text-align:left; color:#00c0f2;">#</th>' +
+            '<th style="padding:8px; text-align:left; color:#00c0f2;">Alice</th>';
+        if (showEve) headerHtml += '<th style="padding:8px; text-align:left; color:#ff4b4b;">Eve</th>';
+        headerHtml += '<th style="padding:8px; text-align:left; color:#28a745;">Bob</th>' +
+            '<th style="padding:8px; text-align:left;">Outcome</th>';
+        header.innerHTML = headerHtml;
+
+        const body = document.getElementById('tableBody');
+        let bodyHtml = '';
+        data.forEach(function(p) {
+            bodyHtml += '<tr id="row-' + p.id + '" style="border-bottom:1px solid #222; transition:background 0.3s;">' +
+                '<td style="padding:8px; color:#888;">' + p.id + '</td>' +
+                '<td style="padding:8px; color:#555;" id="a-' + p.id + '">—</td>';
+            if (showEve) bodyHtml += '<td style="padding:8px; color:#555;" id="e-' + p.id + '">—</td>';
+            bodyHtml += '<td style="padding:8px; color:#555;" id="b-' + p.id + '">—</td>' +
+                '<td style="padding:8px; color:#555;" id="o-' + p.id + '">pending…</td>' +
+                '</tr>';
+        });
+        body.innerHTML = bodyHtml;
+    }
+    buildTable();
+
+    // --- Update the current row's cells as its photon passes through each stage ---
+    function updateTable() {
+        const p = data[currentIdx];
+        const rowEl = document.getElementById('row-' + p.id);
+        rowEl.style.background = '#1c2733';
+
+        const aCell = document.getElementById('a-' + p.id);
+        aCell.innerText = p.a_arrow + '  (base ' + p.a_base + ', bit ' + p.a_bit + ')';
+        aCell.style.color = '#ddd';
+
+        if (showEve) {
+            const eCell = document.getElementById('e-' + p.id);
+            if (state === 'eve' || state === 'transit2' || state === 'bob') {
+                eCell.innerText = p.e_arrow + '  (base ' + p.e_base + ', bit ' + p.e_bit + ')';
+                eCell.style.color = '#ddd';
+            }
+        }
+
+        if (state === 'bob') {
+            const bCell = document.getElementById('b-' + p.id);
+            bCell.innerText = p.b_arrow + '  (base ' + p.b_base + ', bit ' + p.b_bit + ')';
+            bCell.style.color = '#ddd';
+
+            const match = (p.a_base === p.b_base);
+            const oCell = document.getElementById('o-' + p.id);
+            if (!match) {
+                oCell.innerText = '🗑️ Discarded';
+                oCell.style.color = '#888';
+            } else if (p.a_bit === p.b_bit) {
+                oCell.innerText = '✅ Match';
+                oCell.style.color = '#28a745';
+            } else {
+                oCell.innerText = '🚨 Mismatch';
+                oCell.style.color = '#ff4b4b';
+            }
+            rowEl.style.background = '#152018';
+        }
+    }
+
+    function animate() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         frame++;
-        
+
         let p = data[currentIdx];
         document.getElementById('photon-id').innerText = p.id;
-        
+
         // Define clean stationary component bounds
         let aX = 40, eX = 360, bX = 680;
         if (!showEve) bX = 520;
@@ -134,54 +219,59 @@ if st.button("🚀 Run Live Physics Simulation", type="primary"):
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        if (showEve) {{
+        if (showEve) {
             ctx.moveTo(190, 100); ctx.lineTo(360, 100);
             ctx.moveTo(510, 100); ctx.lineTo(680, 100);
-        }} else {{
+        } else {
             ctx.moveTo(190, 100); ctx.lineTo(520, 100);
-        }}
+        }
         ctx.stroke();
 
         // High frequency position translation loops
-        if (state === 'alice') {{
+        if (state === 'alice') {
             pX = aX + 75;
-            if (frame > 30) {{ state = 'transit1'; frame = 0; }}
-        }} else if (state === 'transit1') {{
+            if (frame > dwellAliceEve) { state = 'transit1'; frame = 0; }
+        } else if (state === 'transit1') {
             let target = showEve ? eX : bX;
-            pX += (target - pX) * 0.15;
-            if (Math.abs(pX - target) < 5) {{
+            pX += (target - pX) * lerpRate;
+            if (Math.abs(pX - target) < 5) {
                 state = showEve ? 'eve' : 'bob';
                 frame = 0;
-            }}
-        }} else if (state === 'eve') {{
+            }
+        } else if (state === 'eve') {
             pX = eX + 75;
-            if (frame > 30) {{ state = 'transit2'; frame = 0; }}
-        }} else if (state === 'transit2') {{
-            pX += (bX - pX) * 0.15;
-            if (Math.abs(pX - bX) < 5) {{ state = 'bob'; frame = 0; }}
-        }} else if (state === 'bob') {{
+            if (frame > dwellAliceEve) { state = 'transit2'; frame = 0; }
+        } else if (state === 'transit2') {
+            pX += (bX - pX) * lerpRate;
+            if (Math.abs(pX - bX) < 5) { state = 'bob'; frame = 0; }
+        } else if (state === 'bob') {
             pX = bX + 75;
-            if (frame > 40) {{
+            if (frame > dwellBob) {
                 currentIdx++;
-                if (currentIdx >= data.length) currentIdx = 0; // Seamless looping visualization
-                state = 'alice';
-                frame = 0;
-            }}
-        }}
+                if (currentIdx >= data.length) {
+                    finished = true;
+                } else {
+                    state = 'alice';
+                    frame = 0;
+                }
+            }
+        }
+
+        updateTable();
 
         // Draw lab hardware boxes
         drawBox(aX, 30, 150, 140, "ALICE'S BOX", p.a_arrow, "Base: " + p.a_base, "Bit Sent: " + p.a_bit, '#00c0f2', state === 'alice');
-        if (showEve) {{
+        if (showEve) {
             let arr = (state === 'alice' || state === 'transit1') ? '❓' : p.e_arrow;
             let readBit = (state === 'alice' || state === 'transit1') ? '—' : p.e_bit;
             drawBox(eX, 30, 150, 140, "EVE'S BOX", arr, "Base: " + p.e_base, "Read: " + readBit, '#ff4b4b', state === 'eve');
-        }}
+        }
         let bArrow = (state === 'bob') ? p.b_arrow : '❓';
         let bBit = (state === 'bob') ? p.b_bit : '—';
         drawBox(bX, 30, 150, 140, "BOB'S BOX", bArrow, "Guess: " + p.b_base, "Output: " + bBit, '#28a745', state === 'bob');
 
         // Draw active trailing quantum photon sphere
-        if (state === 'transit1' || state === 'transit2') {{
+        if (state === 'transit1' || state === 'transit2') {
             ctx.fillStyle = (state === 'transit1') ? '#00c0f2' : (showEve ? '#ff4b4b' : '#00c0f2');
             ctx.shadowBlur = 10;
             ctx.shadowColor = ctx.fillStyle;
@@ -189,34 +279,48 @@ if st.button("🚀 Run Live Physics Simulation", type="primary"):
             ctx.arc(pX, 100, 8, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0; // Reset canvas glow states
-        }}
+        }
+
+        if (finished) {
+            document.getElementById('statusLine').innerText = '✅ Transmission complete — run the simulation again for a new random run';
+            return; // stop the loop, leave the final frame + fully-populated table on screen
+        }
 
         requestAnimationFrame(animate);
-    }}
+    }
     animate();
     </script>
     """
-    st.components.v1.html(html_canvas, height=270)
 
-    # --- 3. FINAL HISTORICAL LOG EXTRACTION MATRIX ---
+    html_canvas = (html_template
+        .replace("__DATA__", json.dumps(js_photon_array))
+        .replace("__SHOW_EVE__", str(enable_eve).lower())
+        .replace("__SPEED__", str(speed))
+        .replace("__NUM__", str(num_photons)))
+
+    component_height = 620 + (40 if enable_eve else 0)
+    st.components.v1.html(html_canvas, height=component_height, scrolling=False)
+
+    # --- 3. FINAL HISTORICAL LOG EXTRACTION MATRIX (full precomputed answer key) ---
     st.markdown("---")
-    st.subheader("📋 Quantum Transmission Tracking Matrix")
-    df = pd.DataFrame(history_data)
-    st.dataframe(df.set_index("Photon #"), use_container_width=True)
-
     st.subheader("🔑 Final Sifted Key Extraction")
+    st.caption("This is the complete answer key for this run — the live matrix above fills in row by row as the animation plays.")
     sifted_rows = [r for r in history_data if r["Bases Match?"] == "Yes"]
-    
+
     a_key = [str(r["Alice Bit"]) for r in sifted_rows]
     b_key = [str(r["Bob Bit"]) for r in sifted_rows]
-    
+
     k1, k2 = st.columns(2)
     k1.info(f"**Alice's Sifted Key:** `{' '.join(a_key) if a_key else 'Empty'}`")
     k2.success(f"**Bob's Sifted Key:** `{' '.join(b_key) if b_key else 'Empty'}`")
-    
+
     if a_key == b_key and len(a_key) > 0:
         st.success("🔒 Keys match perfectly! Secure quantum pipeline finalized.")
     elif len(a_key) == 0:
         st.warning("No bases matched by random chance. Run the simulation again!")
     else:
         st.error("🚨 Key eavesdropping signature detected! The communication path is insecure.")
+
+    with st.expander("📋 Raw data table"):
+        df = pd.DataFrame(history_data)
+        st.dataframe(df.set_index("Photon #"), use_container_width=True)
