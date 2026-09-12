@@ -83,6 +83,91 @@ if st.session_state.running:
         if enable_eve:
             middle_box.markdown("<div style='text-align:center; margin-top:50px;'>✨ 🌌 Photon leaving Alice...</div>", unsafe_allowed_html=True)
         bob_box.markdown("<div style='border:3px dashed #ccc; padding:20px; border-radius:10px; text-align:center; color:#aaa; margin-top:10px;'><h3>👨‍💻 Bob's Box</h3><br><p>Waiting for photon...</p></div>", unsafe_allowed_html=True)
+import streamlit as st
+import random
+import time
+import pandas as pd
+
+st.set_page_config(layout="wide")
+
+st.title("🌌 Real-Time BB84 Quantum Photon Simulator")
+st.write("Watch individual photons emerge from Alice's box, polarize, travel across the channel, and enter Bob's measuring box.")
+
+# Dictionary to convert base and bit into standard polarization arrows
+ARROW_MAP = {
+    ('+', 0): "→ (Horizontal)",
+    ('+', 1): "↑ (Vertical)",
+    ('X', 0): "↖ (Diagonal 135°)",
+    ('X', 1): "↗ (Diagonal 45°)"
+}
+
+# 1. User Setup
+with st.sidebar:
+    st.header("🎛️ Simulator Settings")
+    num_photons = st.slider("Total Photons to Transmit", min_value=5, max_value=20, value=8)
+    enable_eve = st.checkbox("🕵️‍♀️ Deploy Eve (Eavesdropper Intercept)")
+    sim_speed = st.slider("Transmission Speed (Seconds per phase)", min_value=0.2, max_value=2.0, value=0.6)
+
+# Initialize Session States to keep historical table data across frames
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "running" not in st.session_state:
+    st.session_state.running = False
+
+# 2. Controls to start or reset
+c_start, c_reset = st.columns(2)
+with c_start:
+    start_sim = st.button("🚀 Run Live Simulation", type="primary")
+with c_reset:
+    if st.button("🔄 Reset Logs"):
+        st.session_state.history = []
+        st.session_state.running = False
+        st.rerun()
+
+if start_sim:
+    st.session_state.history = []  # Clear previous run data
+    st.session_state.running = True
+
+# 3. Active Real-Time Animation Loop
+if st.session_state.running:
+    st.subheader("📦 Live Lab Setup")
+    
+    # Establish distinct, stationary column placeholders
+    if enable_eve:
+        col1, col2, col3 = st.columns(3)
+        alice_box = col1.empty()
+        middle_box = col2.empty()
+        bob_box = col3.empty()
+    else:
+        col1, col2 = st.columns(2)
+        alice_box = col1.empty()
+        bob_box = col2.empty()
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i in range(num_photons):
+        progress_bar.progress((i + 1) / num_photons)
+        status_text.markdown(f"### ⚡ Transmitting Photon **#{i+1}** of {num_photons}...")
+
+        # --- PHASE 1: Alice configures her box and fires ---
+        a_bit = random.randint(0, 1)
+        a_base = random.choice(['+', 'X'])
+        a_orient = ARROW_MAP[(a_base, a_bit)]
+
+        alice_box.markdown(f"""
+        <div style="border:3px solid #00c0f2; padding:20px; border-radius:10px; background-color:#f0f9ff; text-align:center;">
+            <h3>👩‍💻 Alice's Box</h3>
+            <h1 style="color:#00c0f2; font-size: 40px;">{a_orient}</h1>
+            <p><b>Base Selected:</b> [ {a_base} ]</p>
+            <p><b>Bit Input:</b> {a_bit}</p>
+            <span style="background-color:#00c0f2; color:white; padding:4px 8px; border-radius:5px;">FIRED 🔥</span>
+        </div>
+        """, unsafe_allowed_html=True)
+        
+        if enable_eve:
+            middle_box.markdown("<div style='text-align:center; margin-top:50px;'>✨ 🌌 Photon leaving Alice...</div>", unsafe_allowed_html=True)
+        bob_box.markdown("<div style='border:3px dashed #ccc; padding:20px; border-radius:10px; text-align:center; color:#aaa; margin-top:10px;'><h3>👨‍💻 Bob's Box</h3><br><p>Waiting for photon...</p></div>", unsafe_allowed_html=True)
         
         time.sleep(sim_speed)
 
