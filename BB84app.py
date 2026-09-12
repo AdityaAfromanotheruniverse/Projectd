@@ -62,27 +62,22 @@ def render_arena(photon_position, current_arrow, a_val, e_val, b_val, show_eve):
     if show_eve:
         return f"""
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 25px; border-radius: 12px; background: #f9f9f9; border: 1px solid #ddd; font-family: sans-serif; color: #333;">
-            <!-- ALICE -->
             <div style="width: 26%; text-align: center; padding: 15px; border-radius: 8px; {active_alice}">
                 <h4 style="margin: 0; color: #00c0f2;">👩‍💻 Alice's Box</h4>
                 <h1 style="margin: 10px 0; font-size: 42px; color: #00c0f2;">{a_val['arrow']}</h1>
                 <p style="margin: 0; font-size: 13px;">Base: <b>{a_val['base']}</b> | Bit: <b>{a_val['bit']}</b></p>
             </div>
-            <!-- FIBER LINE 1 -->
             <div style="flex-grow: 1; text-align: center; letter-spacing: 2px; font-family: monospace; color: #bbb;">
                 {t1}{t2}{t3}
             </div>
-            <!-- EVE -->
             <div style="width: 26%; text-align: center; padding: 15px; border-radius: 8px; {active_eve}">
                 <h4 style="margin: 0; color: #ff4b4b;">🕵️‍♀️ Eve's Box</h4>
                 <h1 style="margin: 10px 0; font-size: 42px; color: #ff4b4b;">{e_val['arrow']}</h1>
                 <p style="margin: 0; font-size: 13px;">Base: <b>{e_val['base']}</b> | Read: <b>{e_val['bit']}</b></p>
             </div>
-            <!-- FIBER LINE 2 -->
             <div style="flex-grow: 1; text-align: center; letter-spacing: 2px; font-family: monospace; color: #bbb;">
                 {t4}{t5}{t6}
             </div>
-            <!-- BOB -->
             <div style="width: 26%; text-align: center; padding: 15px; border-radius: 8px; {active_bob}">
                 <h4 style="margin: 0; color: #28a745;">👨‍💻 Bob's Box</h4>
                 <h1 style="margin: 10px 0; font-size: 42px; color: #28a745;">{b_val['arrow']}</h1>
@@ -91,7 +86,6 @@ def render_arena(photon_position, current_arrow, a_val, e_val, b_val, show_eve):
         </div>
         """
     else:
-        # Layout structure optimized for direct 2-box connection
         return f"""
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 25px; border-radius: 12px; background: #f9f9f9; border: 1px solid #ddd; font-family: sans-serif; color: #333;">
             <div style="width: 40%; text-align: center; padding: 15px; border-radius: 8px; {active_alice}">
@@ -115,15 +109,12 @@ if st.session_state.running:
     st.markdown("---")
     status_text = st.empty()
     progress_bar = st.progress(0)
-    
-    # FIX: Initialize with st.empty() placeholder container instead of an unparameterized st.html()
     arena_canvas = st.empty()
 
     for i in range(num_photons):
         progress_bar.progress((i + 1) / num_photons)
         status_text.markdown(f"### ⚡ Simulating Photon **#{i+1}** of {num_photons}...")
 
-        # Setup initial telemetry vectors
         a_bit = random.randint(0, 1)
         a_base = random.choice(['+', 'X'])
         a_arrow = ARROW_MAP[(a_base, a_bit)]
@@ -133,7 +124,6 @@ if st.session_state.running:
         current_arrow = a_arrow
         
         e_base_log, e_arrow_log, e_bit_log = "—", "—", "—"
-
         if enable_eve:
             eve_base = random.choice(['+', 'X'])
             eve_bit = a_bit if eve_base == a_base else random.randint(0, 1)
@@ -149,7 +139,6 @@ if st.session_state.running:
         b_bit = current_bit if current_base == b_base else random.randint(0, 1)
         b_arrow = ARROW_MAP[(b_base, b_bit)]
 
-        # --- STEP 1: Photon is created inside Alice's Box ---
         a_data = {"arrow": a_arrow, "base": a_base, "bit": a_bit}
         e_data = {"arrow": "❓", "base": "—", "bit": "—"}
         b_data = {"arrow": "❓", "base": "—", "bit": "—"}
@@ -157,7 +146,6 @@ if st.session_state.running:
         arena_canvas.html(render_arena("alice", a_arrow, a_data, e_data, b_data, enable_eve))
         time.sleep(sim_speed)
 
-        # --- STEP 2: Photon crawls down channel 1 ---
         arena_canvas.html(render_arena("transit1_a", a_arrow, a_data, e_data, b_data, enable_eve))
         time.sleep(sim_speed)
         arena_canvas.html(render_arena("transit1_b", a_arrow, a_data, e_data, b_data, enable_eve))
@@ -165,13 +153,11 @@ if st.session_state.running:
         arena_canvas.html(render_arena("transit1_c", a_arrow, a_data, e_data, b_data, enable_eve))
         time.sleep(sim_speed)
 
-        # --- STEP 3: Photon processed by Eve's Box ---
         if enable_eve:
             e_data = {"arrow": eve_arrow, "base": eve_base, "bit": eve_bit}
             arena_canvas.html(render_arena("eve", eve_arrow, a_data, e_data, b_data, enable_eve))
             time.sleep(sim_speed)
 
-            # --- STEP 4: Photon crawls down channel 2 ---
             arena_canvas.html(render_arena("transit2_a", eve_arrow, a_data, e_data, b_data, enable_eve))
             time.sleep(sim_speed)
             arena_canvas.html(render_arena("transit2_b", eve_arrow, a_data, e_data, b_data, enable_eve))
@@ -179,7 +165,6 @@ if st.session_state.running:
             arena_canvas.html(render_arena("transit2_c", eve_arrow, a_data, e_data, b_data, enable_eve))
             time.sleep(sim_speed)
         else:
-            # Continues crawling smoothly across channel if channel is empty
             arena_canvas.html(render_arena("transit2_a", a_arrow, a_data, e_data, b_data, enable_eve))
             time.sleep(sim_speed)
             arena_canvas.html(render_arena("transit2_b", a_arrow, a_data, e_data, b_data, enable_eve))
@@ -187,16 +172,15 @@ if st.session_state.running:
             arena_canvas.html(render_arena("transit2_c", a_arrow, a_data, e_data, b_data, enable_eve))
             time.sleep(sim_speed)
 
-        # --- STEP 5: Photon lands in Bob's Box ---
         b_data = {"arrow": b_arrow, "base": b_base, "bit": b_bit}
         arena_canvas.html(render_arena("bob", current_arrow, a_data, e_data, b_data, enable_eve))
         time.sleep(sim_speed)
 
-        # --- PROCESS MATRIX LOG ROW ---
         is_sifted = (a_base == b_base)
         outcome = "🗑️ Discarded"
         if is_sifted:
-            outcome = "✅ Match" if (a_bit == b_bit)
+            outcome = "✅ Match" if (a_bit == b_bit) else "🚨 Mismatch (Tampered!)"
+
         if enable_eve:
             row_data = {
                 "Photon #": i + 1,
@@ -249,4 +233,3 @@ if len(st.session_state.history) > 0:
         st.warning("No bases matched by random chance. Run the simulation again with more photons!")
     else:
         st.error("🚨 Key eavesdropping signature detected! The communication path is insecure.")
-        
