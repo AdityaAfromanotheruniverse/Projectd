@@ -196,3 +196,57 @@ if st.session_state.running:
         is_sifted = (a_base == b_base)
         outcome = "🗑️ Discarded"
         if is_sifted:
+            outcome = "✅ Match" if (a_bit == b_bit)
+        if enable_eve:
+            row_data = {
+                "Photon #": i + 1,
+                "Alice Orientation": a_arrow,
+                "Eve Orientation": e_arrow_log,
+                "Bob Orientation": b_arrow,
+                "Outcome": outcome,
+                "Alice Bit": a_bit,
+                "Bob Bit": b_bit,
+                "Bases Match?": "Yes" if is_sifted else "No"
+            }
+        else:
+            row_data = {
+                "Photon #": i + 1,
+                "Alice Orientation": a_arrow,
+                "Bob Orientation": b_arrow,
+                "Outcome": outcome,
+                "Alice Bit": a_bit,
+                "Bob Bit": b_bit,
+                "Bases Match?": "Yes" if is_sifted else "No"
+            }
+
+        st.session_state.history.append(row_data)
+
+    st.session_state.running = False
+    status_text.markdown("### 🎉 Simulation Completed!")
+
+# 4. Display Historical Matrix Summary
+if len(st.session_state.history) > 0:
+    st.markdown("---")
+    st.subheader("📋 Quantum Transmission Tracking Matrix")
+    
+    df = pd.DataFrame(st.session_state.history)
+    st.dataframe(df.set_index("Photon #"), use_container_width=True)
+
+    st.subheader("🔑 Final Sifted Key Extraction")
+    sifted_rows = [r for r in st.session_state.history if r["Bases Match?"] == "Yes"]
+    
+    a_key = [str(r["Alice Bit"]) for r in sifted_rows]
+    b_key = [str(r["Bob Bit"]) for r in sifted_rows]
+    
+    k1, k2 = st.columns(2)
+    k1.info(f"**Alice's Sifted Key:** `{' '.join(a_key) if a_key else 'Empty'}`")
+    k2.success(f"**Bob's Sifted Key:** `{' '.join(b_key) if b_key else 'Empty'}`")
+    
+    if a_key == b_key and len(a_key) > 0:
+        st.balloons()
+        st.success("🔒 Keys match perfectly! Secure quantum pipeline finalized.")
+    elif len(a_key) == 0:
+        st.warning("No bases matched by random chance. Run the simulation again with more photons!")
+    else:
+        st.error("🚨 Key eavesdropping signature detected! The communication path is insecure.")
+        
