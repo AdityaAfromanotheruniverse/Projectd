@@ -116,8 +116,8 @@ if st.session_state.running:
     status_text = st.empty()
     progress_bar = st.progress(0)
     
-    # Establish single dynamic canvas target to eliminate UI jittering
-    arena_canvas = st.html("")
+    # FIX: Initialize with st.empty() placeholder container instead of an unparameterized st.html()
+    arena_canvas = st.empty()
 
     for i in range(num_photons):
         progress_bar.progress((i + 1) / num_photons)
@@ -195,3 +195,4 @@ if st.session_state.running:
         # --- PROCESS MATRIX LOG ROW ---
         is_sifted = (a_base == b_base)
         outcome = "🗑️ Discarded"
+        if is_sifted:
