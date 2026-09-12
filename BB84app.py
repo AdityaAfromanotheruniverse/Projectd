@@ -1,4 +1,4 @@
-                eve_bit = random.randint(0, 1)
+            eve_bit = random.randint(0, 1)
                 
             current_bit = eve_bit
             current_base = eve_base
