@@ -113,6 +113,36 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "running" not in st.session_state:
     st.session_state.running = False
+import streamlit as st
+import random
+import time
+import pandas as pd
+
+st.set_page_config(layout="wide")
+
+st.title("🌌 Real-Time BB84 Quantum Photon Simulator")
+st.write("Watch individual photons emerge from Alice's box, polarize, travel across the channel, and enter Bob's measuring box.")
+
+# Dictionary to convert base and bit into standard polarization arrows
+ARROW_MAP = {
+    ('+', 0): "→ (Horizontal)",
+    ('+', 1): "↑ (Vertical)",
+    ('X', 0): "↖ (Diagonal 135°)",
+    ('X', 1): "↗ (Diagonal 45°)"
+}
+
+# 1. User Setup
+with st.sidebar:
+    st.header("🎛️ Simulator Settings")
+    num_photons = st.slider("Total Photons to Transmit", min_value=5, max_value=20, value=8)
+    enable_eve = st.checkbox("🕵️‍♀️ Deploy Eve (Eavesdropper Intercept)")
+    sim_speed = st.slider("Transmission Speed (Seconds per phase)", min_value=0.2, max_value=2.0, value=0.6)
+
+# Initialize Session States to keep historical table data across frames
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "running" not in st.session_state:
+    st.session_state.running = False
 
 # 2. Controls to start or reset
 c_start, c_reset = st.columns(2)
@@ -132,7 +162,7 @@ if start_sim:
 if st.session_state.running:
     st.subheader("📦 Live Lab Setup")
     
-    # Establish distinct, stationary column placeholders
+    # Establish distinct placeholders
     if enable_eve:
         col1, col2, col3 = st.columns(3)
         alice_box = col1.empty()
@@ -155,19 +185,25 @@ if st.session_state.running:
         a_base = random.choice(['+', 'X'])
         a_orient = ARROW_MAP[(a_base, a_bit)]
 
-        alice_box.markdown(f"""
-        <div style="border:3px solid #00c0f2; padding:20px; border-radius:10px; background-color:#f0f9ff; text-align:center;">
-            <h3>👩‍💻 Alice's Box</h3>
-            <h1 style="color:#00c0f2; font-size: 40px;">{a_orient}</h1>
-            <p><b>Base Selected:</b> [ {a_base} ]</p>
-            <p><b>Bit Input:</b> {a_bit}</p>
-            <span style="background-color:#00c0f2; color:white; padding:4px 8px; border-radius:5px;">FIRED 🔥</span>
-        </div>
-        """, unsafe_allowed_html=True)
+        # Use clean markdown layout without styling blocks inside empty containers
+        alice_box.markdown(
+            f"### 👩‍💻 Alice's Box\n"
+            f"**State:** `FIRED 🔥`\n\n"
+            f"## {a_orient}\n\n"
+            f"* **Base:** `[ {a_base} ]`\n"
+            f"* **Bit Input:** `{a_bit}`"
+        )
         
         if enable_eve:
-            middle_box.markdown("<div style='text-align:center; margin-top:50px;'>✨ 🌌 Photon leaving Alice...</div>", unsafe_allowed_html=True)
-        bob_box.markdown("<div style='border:3px dashed #ccc; padding:20px; border-radius:10px; text-align:center; color:#aaa; margin-top:10px;'><h3>👨‍💻 Bob's Box</h3><br><p>Waiting for photon...</p></div>", unsafe_allowed_html=True)
+            middle_box.markdown("\n\n### 🌌 Mid-Channel\n\n✨ Photon traveling from Alice...")
+        
+        bob_box.markdown(
+            f"### 👨‍💻 Bob's Box\n"
+            f"**State:** `Waiting... ⏳`\n\n"
+            f"## ❓\n\n"
+            f"* **Base:** `Selecting...`\n"
+            f"* **Bit Read:** `—`"
+        )
         
         time.sleep(sim_speed)
 
@@ -189,15 +225,13 @@ if st.session_state.running:
             current_orient = ARROW_MAP[(eve_base, eve_bit)]
             eve_orient_log = current_orient
 
-            middle_box.markdown(f"""
-            <div style="border:3px solid #ff4b4b; padding:20px; border-radius:10px; background-color:#fff5f5; text-align:center;">
-                <h3>🕵️‍♀️ Eve's Box (Intercepted!)</h3>
-                <h1 style="color:#ff4b4b; font-size: 40px;">{eve_orient_log}</h1>
-                <p><b>Base Used:</b> [ {eve_base} ]</p>
-                <p><b>Measured Bit:</b> {eve_bit}</p>
-                <span style="background-color:#ff4b4b; color:white; padding:4px 8px; border-radius:5px;">RE-SENT 🔄</span>
-            </div>
-            """, unsafe_allowed_html=True)
+            middle_box.markdown(
+                f"### 🕵️‍♀️ Eve's Box\n"
+                f"**State:** `INTERCEPTED 🚨`\n\n"
+                f"## {eve_orient_log}\n\n"
+                f"* **Base Used:** `[ {eve_base} ]`\n"
+                f"* **Bit Read:** `{eve_bit}`"
+            )
             time.sleep(sim_speed)
 
         # --- PHASE 3: Bob's Box receives and measures ---
@@ -210,22 +244,20 @@ if st.session_state.running:
             
         b_orient = ARROW_MAP[(b_base, b_bit)]
 
-        bob_box.markdown(f"""
-        <div style="border:3px solid #28a745; padding:20px; border-radius:10px; background-color:#f4fff6; text-align:center;">
-            <h3>👨‍💻 Bob's Box</h3>
-            <h1 style="color:#28a745; font-size: 40px;">{b_orient}</h1>
-            <p><b>Base Guessed:</b> [ {b_base} ]</p>
-            <p><b>Bit Read:</b> {b_bit}</p>
-            <span style="background-color:#28a745; color:white; padding:4px 8px; border-radius:5px;">MEASURED 🎯</span>
-        </div>
-        """, unsafe_allowed_html=True)
+        bob_box.markdown(
+            f"### 👨‍💻 Bob's Box\n"
+            f"**State:** `MEASURED 🎯`\n\n"
+            f"## {b_orient}\n\n"
+            f"* **Base Guessed:** `[ {b_base} ]`\n"
+            f"* **Bit Output:** `{b_bit}`"
+        )
         
         is_sifted = (a_base == b_base)
         outcome = "🗑️ Discarded"
         if is_sifted:
-            outcome = "✅ Match" if (a_bit == b_bit) else "🚨 Mismatch (Tampered!)"
+            outcome = "✅ Match" if (a_bit == b_bit) else "🚨 Mismatch"
 
-        # Organize structural row information dynamically depending on Eve status
+        # Organize row data according to parameters
         if enable_eve:
             row_data = {
                 "Photon #": i + 1,
