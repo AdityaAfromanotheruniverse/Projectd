@@ -48,9 +48,9 @@ if st.session_state.running:
     st.subheader("📦 Live Lab Setup")
     
     # Establish stationary visual slots across the screen layout
-    box_cols = st.columns(3) if enable_eve else st.columns(3)
+    box_cols = st.columns(3) if enable_eve else st.columns(2)
     alice_box = box_cols[0].empty()
-    middle_box = box_cols[1].empty()
+    middle_box = box_cols[1].empty() if enable_eve else None
     bob_box = box_cols[-1].empty()
     
     # Progress tracking tools
@@ -87,22 +87,26 @@ if st.session_state.running:
         # ----------------------------------------------------
         # --- VISUAL PHASE 1: Alice Fires Photon ---
         # ----------------------------------------------------
-        alice_box.markdown(f"""
-        <div style="border:3px solid #00c0f2; padding:20px; border-radius:10px; background-color:#f0f9ff; text-align:center; box-shadow: 0 0 15px #00c0f2;">
-            <h3>👩‍💻 Alice's Box</h3>
+        alice_box.html(f"""
+        <div style="border:3px solid #00c0f2; padding:20px; border-radius:10px; background-color:#f0f9ff; text-align:center; box-shadow: 0 0 15px #00c0f2; font-family:sans-serif;">
+            <h3 style="margin:5px 0;">👩‍💻 Alice's Box</h3>
             <h1 style="color:#00c0f2; font-size: 55px; margin: 10px 0;">{a_arrow}</h1>
             <p><b>Base Selected:</b> [ {a_base} ]</p>
             <p><b>Bit Input:</b> {a_bit}</p>
             <span style="background-color:#00c0f2; color:white; padding:4px 8px; border-radius:5px; font-weight:bold;">FIRED 🔥</span>
         </div>
-        """, unsafe_allowed_html=True)
+        """)
         
         if enable_eve:
-            middle_box.markdown("<div style='text-align:center; margin-top:60px; font-size:16px; color:#aaa;'>🌌 Waiting for intercept...</div>", unsafe_allowed_html=True)
-        else:
-            middle_box.markdown("<div style='text-align:center; margin-top:60px; font-size:24px; color:#00c0f2;'>● ──▶</div>", unsafe_allowed_html=True)
+            middle_box.html("""
+            <div style="text-align:center; margin-top:60px; font-size:16px; color:#aaa; font-family:sans-serif;">🌌 Waiting for intercept...</div>
+            """)
             
-        bob_box.markdown("<div style='border:3px dashed #ccc; padding:20px; border-radius:10px; text-align:center; color:#aaa;'><h3>👨‍💻 Bob's Box</h3><br><p>Waiting for photon...</p></div>", unsafe_allowed_html=True)
+        bob_box.html("""
+        <div style="border:3px dashed #ccc; padding:20px; border-radius:10px; text-align:center; color:#aaa; font-family:sans-serif;">
+            <h3 style="margin:5px 0;">👨‍💻 Bob's Box</h3><br><p>Waiting for photon...</p>
+        </div>
+        """)
         
         time.sleep(sim_speed)
 
@@ -110,40 +114,40 @@ if st.session_state.running:
         # --- VISUAL PHASE 2: Mid-Transit (Eve Intercept) ---
         # ----------------------------------------------------
         if enable_eve:
-            middle_box.markdown(f"""
-            <div style="border:3px solid #ff4b4b; padding:20px; border-radius:10px; background-color:#fff5f5; text-align:center; box-shadow: 0 0 15px #ff4b4b;">
-                <h3>🕵️‍♀️ Eve's Box (Intercepted!)</h3>
+            middle_box.html(f"""
+            <div style="border:3px solid #ff4b4b; padding:20px; border-radius:10px; background-color:#fff5f5; text-align:center; box-shadow: 0 0 15px #ff4b4b; font-family:sans-serif;">
+                <h3 style="margin:5px 0;">🕵️‍♀️ Eve's Box (Intercepted!)</h3>
                 <h1 style="color:#ff4b4b; font-size: 55px; margin: 10px 0;">{eve_orient_log}</h1>
                 <p><b>Base Used:</b> [ {eve_base} ]</p>
                 <p><b>Measured Bit:</b> {eve_bit}</p>
                 <span style="background-color:#ff4b4b; color:white; padding:4px 8px; border-radius:5px; font-weight:bold;">RE-SENT 🔄</span>
             </div>
-            """, unsafe_allowed_html=True)
+            """)
             time.sleep(sim_speed)
 
         # ----------------------------------------------------
         # --- VISUAL PHASE 3: Bob Receives & Measures ---
         # ----------------------------------------------------
         if enable_eve:
-            middle_box.markdown(f"""
-            <div style="border:3px solid #ff4b4b; padding:20px; border-radius:10px; background-color:#fff5f5; text-align:center; opacity: 0.6;">
-                <h3>🕵️‍♀️ Eve's Box</h3>
+            middle_box.html(f"""
+            <div style="border:3px solid #ff4b4b; padding:20px; border-radius:10px; background-color:#fff5f5; text-align:center; opacity: 0.6; font-family:sans-serif;">
+                <h3 style="margin:5px 0;">🕵️‍♀️ Eve's Box</h3>
                 <h1 style="color:#ff4b4b; font-size: 55px; margin: 10px 0;">{eve_orient_log}</h1>
                 <p><b>Base Used:</b> [ {eve_base} ]</p>
                 <p><b>Measured Bit:</b> {eve_bit}</p>
                 <span style="background-color:#777; color:white; padding:4px 8px; border-radius:5px;">FORWARDED ➡️</span>
             </div>
-            """, unsafe_allowed_html=True)
+            """)
 
-        bob_box.markdown(f"""
-        <div style="border:3px solid #28a745; padding:20px; border-radius:10px; background-color:#f4fff6; text-align:center; box-shadow: 0 0 15px #28a745;">
-            <h3>👨‍💻 Bob's Box</h3>
+        bob_box.html(f"""
+        <div style="border:3px solid #28a745; padding:20px; border-radius:10px; background-color:#f4fff6; text-align:center; box-shadow: 0 0 15px #28a745; font-family:sans-serif;">
+            <h3 style="margin:5px 0;">👨‍💻 Bob's Box</h3>
             <h1 style="color:#28a745; font-size: 55px; margin: 10px 0;">{b_arrow}</h1>
             <p><b>Base Guessed:</b> [ {b_base} ]</p>
             <p><b>Bit Read:</b> {b_bit}</p>
             <span style="background-color:#28a745; color:white; padding:4px 8px; border-radius:5px; font-weight:bold;">MEASURED 🎯</span>
         </div>
-        """, unsafe_allowed_html=True)
+        """)
 
         # Evaluate final key metrics matching criteria
         is_sifted = (a_base == b_base)
