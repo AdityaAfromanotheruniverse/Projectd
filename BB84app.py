@@ -78,8 +78,11 @@ with st.sidebar:
     num_photons = st.slider("Total Photons to Transmit", min_value=3, max_value=20, value=8)
     speed = st.slider("⚡ Animation Speed", min_value=0.5, max_value=3.0, value=1.5, step=0.25,
                        help="Higher = faster photon travel and shorter dwell time in each box")
+    threshold_pct = st.slider("🚨 Abort Threshold (QBER %)", min_value=5, max_value=25, value=11, step=1,
+                               help="Real BB84 implementations abort the key if the estimated error rate "
+                                    "among sifted bits exceeds roughly this much (~11% is the standard bound)")
     enable_eve = st.checkbox("🕵️‍♀️ Deploy Eve (Eavesdropper Intercept)", value=True)
-    st.caption("Photon count and the Eve toggle reshuffle the run automatically. Speed applies instantly to the current run.")
+    st.caption("Photon count and the Eve toggle reshuffle the run automatically. Speed and threshold apply instantly to the current run.")
     shuffle_clicked = st.button("🎲 Shuffle New Random Run", type="primary")
 
 # --- Decide whether we need a fresh random photon stream, or can reuse the cached one ---
@@ -99,7 +102,14 @@ if need_new_data:
 js_photon_array = st.session_state.photon_data
 history_data = st.session_state.history_data
 
-# --- 2. THE HIGH PERFORMANCE SMOOTH CANVAS FRAME (table + sifted key both update live with it) ---
+# Visible confirmation of exactly what's driving the current render — if this line doesn't
+# match your sliders, the browser/tab is showing a stale copy of the app and needs a restart.
+st.info(
+    f"▶ Currently simulating **{num_photons} photons** at **{speed}×** speed, "
+    f"abort threshold **{threshold_pct}%** QBER, Eve **{'ON' if enable_eve else 'OFF'}**."
+)
+
+# --- 2. THE HIGH PERFORMANCE SMOOTH CANVAS FRAME (table + sifted key + QBER all update live) ---
 # Data is injected via plain string substitution (not an f-string) so the JS below can use
 # normal single braces without needing to be doubled everywhere.
 html_template = """
@@ -123,6 +133,7 @@ html_template = """
         <div style="font-size:14px; color:#aaa; margin-bottom:8px;">🔑 Sifted Key (builds live as matching bases land)</div>
         <div style="font-family:monospace; font-size:14px; margin-bottom:4px;"><span style="color:#00c0f2;">Alice:</span> <span id="aliceKeyDisplay" style="color:#eee;">(none yet)</span></div>
         <div style="font-family:monospace; font-size:14px; margin-bottom:10px;"><span style="color:#28a745;">Bob:</span> <span id="bobKeyDisplay" style="color:#eee;">(none yet)</span></div>
+        <div id="qberDisplay" style="font-size:12px; color:#888; margin-bottom:6px;">Error rate (QBER): 0.0% (0 sifted bits so far)</div>
         <div id="keyStatus" style="font-size:13px; color:#888;">Waiting for first matching basis…</div>
     </div>
 </div>
@@ -131,6 +142,7 @@ html_template = """
 const data = __DATA__;
 const showEve = __SHOW_EVE__;
 const speed = __SPEED__;
+const threshold = __THRESHOLD__;
 const canvas = document.getElementById('quantumArena');
 const ctx = canvas.getContext('2d');
 
@@ -142,7 +154,8 @@ let finished = false;
 
 let aliceKeyBits = [];
 let bobKeyBits = [];
-let mismatchDetected = false;
+let siftedCount = 0;
+let errorCount = 0;
 const addedToKey = new Set();
 
 // Dwell / speed settings, scaled by the speed slider (clamped so it never gets unreadable)
@@ -196,7 +209,7 @@ function buildTable() {
 }
 buildTable();
 
-// --- Update the current row's cells (and the live key) as its photon passes each stage.
+// --- Update the current row's cells (and the live key + QBER) as its photon passes each stage.
 // Takes p as a parameter rather than re-reading data[currentIdx], so it stays valid even
 // on the final frame after currentIdx has already advanced past the end of the array. ---
 function updateTable(p) {
@@ -234,23 +247,28 @@ function updateTable(p) {
         }
         rowEl.style.background = '#152018';
 
-        // Only fold this photon into the running key once, the first frame it lands on Bob
+        // Only fold this photon into the running key/QBER once, the first frame it lands on Bob
         if (!addedToKey.has(p.id)) {
             addedToKey.add(p.id);
             if (match) {
                 aliceKeyBits.push(p.a_bit);
                 bobKeyBits.push(p.b_bit);
-                if (p.a_bit !== p.b_bit) mismatchDetected = true;
+                siftedCount++;
+                if (p.a_bit !== p.b_bit) errorCount++;
 
                 document.getElementById('aliceKeyDisplay').innerText = aliceKeyBits.join(' ');
                 document.getElementById('bobKeyDisplay').innerText = bobKeyBits.join(' ');
 
+                const qber = (errorCount / siftedCount) * 100;
+                document.getElementById('qberDisplay').innerText =
+                    'Error rate (QBER): ' + qber.toFixed(1) + '%  (' + errorCount + ' of ' + siftedCount + ' sifted bits mismatched)';
+
                 const statusEl = document.getElementById('keyStatus');
-                if (mismatchDetected) {
-                    statusEl.innerText = '🚨 Mismatch detected — possible eavesdropper on the line!';
+                if (qber > threshold) {
+                    statusEl.innerText = '🚨 Error rate above the ' + threshold + '% threshold — possible eavesdropper!';
                     statusEl.style.color = '#ff4b4b';
                 } else {
-                    statusEl.innerText = '✅ Keys match so far — channel looks secure';
+                    statusEl.innerText = '✅ Error rate within the ' + threshold + '% threshold — channel looks secure so far';
                     statusEl.style.color = '#28a745';
                 }
             }
@@ -333,15 +351,18 @@ function animate() {
     if (finished) {
         document.getElementById('statusLine').innerText = '✅ Transmission complete — shuffle a new random run to try again';
         const statusEl = document.getElementById('keyStatus');
-        if (aliceKeyBits.length === 0) {
+        if (siftedCount === 0) {
             statusEl.innerText = '⚠️ Final: no bases matched by chance — shuffle a new run!';
             statusEl.style.color = '#f5a623';
-        } else if (mismatchDetected) {
-            statusEl.innerText = '🚨 Final: key eavesdropping signature detected — channel is insecure!';
-            statusEl.style.color = '#ff4b4b';
         } else {
-            statusEl.innerText = '🔒 Final: keys match perfectly — secure key established!';
-            statusEl.style.color = '#28a745';
+            const finalQber = (errorCount / siftedCount) * 100;
+            if (finalQber > threshold) {
+                statusEl.innerText = '🚨 Final QBER ' + finalQber.toFixed(1) + '% exceeds ' + threshold + '% threshold — ABORT, key discarded!';
+                statusEl.style.color = '#ff4b4b';
+            } else {
+                statusEl.innerText = '🔒 Final QBER ' + finalQber.toFixed(1) + '% — within threshold, secure key accepted!';
+                statusEl.style.color = '#28a745';
+            }
         }
         return; // stop the loop, leave the final frame + fully-populated table/key on screen
     }
@@ -356,9 +377,10 @@ html_canvas = (html_template
     .replace("__DATA__", json.dumps(js_photon_array))
     .replace("__SHOW_EVE__", str(enable_eve).lower())
     .replace("__SPEED__", str(speed))
+    .replace("__THRESHOLD__", str(threshold_pct))
     .replace("__NUM__", str(num_photons)))
 
-st.components.v1.html(html_canvas, height=760, scrolling=True)
+st.components.v1.html(html_canvas, height=780, scrolling=True)
 
 with st.expander("📋 Raw data table"):
     df = pd.DataFrame(history_data)
